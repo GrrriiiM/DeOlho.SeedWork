@@ -17,7 +17,7 @@ namespace DeOlho.SeedWork.Infrastructure.Repositories
             DeOlhoDbContext deOlhoDbContext)
         {
             _deOlhoDbContext = deOlhoDbContext;
-            _query = _deOlhoDbContext.Query<T>();
+            _query = _deOlhoDbContext.Set<T>();
         }
 
         public IUnitOfWork UnityOfWork => _deOlhoDbContext;

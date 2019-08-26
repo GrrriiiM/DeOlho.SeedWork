@@ -50,7 +50,7 @@ namespace DeOlho.SeedWork
 
             services.AddDbContext<DeOlhoDbContext>();
 
-            services.AddScoped<IMapper, Mapper>();
+            //services.AddScoped<IMapper, Mapper>();
 
             services.AddSwaggerGen(c =>
             {
