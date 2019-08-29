@@ -9,6 +9,7 @@ using Swashbuckle.AspNetCore.Swagger;
 using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using AutoMapper;
+using DeOlho.SeedWork.Domain.Abstractions;
 
 namespace DeOlho.SeedWork
 {
@@ -49,6 +50,8 @@ namespace DeOlho.SeedWork
             services.AddSingleton(deOlhoDbContextConfiguration);
 
             services.AddDbContext<DeOlhoDbContext>();
+
+            services.AddScoped<IUnitOfWork>(sp => sp.GetService<DeOlhoDbContext>());
 
             //services.AddScoped<IMapper, Mapper>();
 

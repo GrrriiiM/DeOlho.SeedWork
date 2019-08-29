@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using DeOlho.SeedWork.Domain.Abstractions;
 using MediatR;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 
 namespace DeOlho.SeedWork.Infrastructure.Data
 {
@@ -49,29 +50,53 @@ namespace DeOlho.SeedWork.Infrastructure.Data
                 c => c.MigrationsAssembly(_deOlhoDbContextConfiguration.MigrationAssembly.GetName().Name));
         }
 
-        public override int SaveChanges()
-        {
-            _mediator.DispatchDomainEventsAsync(this).Wait();
-            return base.SaveChanges();
-        }
+        public IDbContextTransaction CurrentTransaction => Database.CurrentTransaction;
 
         public override int SaveChanges(bool acceptAllChangesOnSuccess)
         {
+            var hasTransaction = CurrentTransaction != null;
+            if (!hasTransaction)
+                Database.BeginTransaction();
+                
+
             _mediator.DispatchDomainEventsAsync(this).Wait();
-            return base.SaveChanges(acceptAllChangesOnSuccess);
+
+            var ret = base.SaveChanges(acceptAllChangesOnSuccess);
+
+            if (!hasTransaction)
+                Database.CommitTransaction();
+
+            return ret;
         }
 
-        public async override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default(CancellationToken))
+        public override int SaveChanges()
         {
-            await _mediator.DispatchDomainEventsAsync(this);
-            return await base.SaveChangesAsync(cancellationToken);
+            return SaveChanges(true);
         }
 
         public async override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default(CancellationToken))
         {
+            var hasTransaction = CurrentTransaction != null;
+            if (!hasTransaction)
+                await Database.BeginTransactionAsync(cancellationToken);
+                
+
             await _mediator.DispatchDomainEventsAsync(this);
-            return await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+
+            var ret = await base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+
+            if (!hasTransaction)
+                Database.CommitTransaction();
+
+            return ret;
         }
+
+        public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default(CancellationToken))
+        {
+            return SaveChangesAsync(true, cancellationToken);
+        }
+
+ 
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
