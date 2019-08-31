@@ -10,6 +10,17 @@ using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using AutoMapper;
 using DeOlho.SeedWork.Domain.Abstractions;
+using DeOlho.EventBus;
+using DeOlho.EventBus.RabbitMQ.DependencyInjection;
+using MediatR;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Newtonsoft.Json.Linq;
+using System.Linq;
+using System.Threading.Tasks;
+using Newtonsoft.Json;
+using HealthChecks.UI.Client;
 
 namespace DeOlho.SeedWork
 {
@@ -43,11 +54,28 @@ namespace DeOlho.SeedWork
                     }));
         }
 
-        public static IServiceCollection AddSeedWork(
+        public static IServiceCollection AddSeedWork<TStartup>(
             this IServiceCollection services, 
-            DeOlhoDbContextConfiguration deOlhoDbContextConfiguration)
+            IConfiguration configuration,
+            SeedWorkConfiguration seedWorkConfiguration = null)
         {
+            var startupAssembly = typeof(TStartup).Assembly;
+
+            seedWorkConfiguration = seedWorkConfiguration ?? new SeedWorkConfiguration();
+
+            services.AddMediatR(startupAssembly);
+
+            var deOlhoDbContextConfiguration = new DeOlhoDbContextConfiguration(
+                configuration.GetConnectionString(seedWorkConfiguration.DeOlhoContextConnectionString),
+                startupAssembly);
+
             services.AddSingleton(deOlhoDbContextConfiguration);
+
+            var eventBusConfig = new EventBusRabbitMQDependencyInjectionConfiguration();
+            eventBusConfig.Configuration(configuration.GetSection(seedWorkConfiguration.EventBusSectionName));
+            eventBusConfig.SubscribeMediatorConsumers(startupAssembly);
+
+            services.AddEventBusRabbitMQ(eventBusConfig);
 
             services.AddDbContext<DeOlhoDbContext>();
 
@@ -61,6 +89,16 @@ namespace DeOlho.SeedWork
             });
 
             services.AddHttpClient("deolho").AddRetryPolicy();
+
+            services.AddHealthChecks()
+                .AddMySql(deOlhoDbContextConfiguration.ConnectionString, "DeOlho Database")
+                .AddRabbitMQ(string.Format("amqp://{0}:{1}@{2}:{3}/{4}",
+                    eventBusConfig.UserName,
+                    eventBusConfig.Password,
+                    eventBusConfig.HostName,
+                    eventBusConfig.Port,
+                    eventBusConfig.VirtualHost),
+                    name: "DeOlho Message Queue");
 
             return services;
         }
@@ -76,6 +114,11 @@ namespace DeOlho.SeedWork
             });
 
             app.UseMigrate();
+
+            app.UseHealthChecks("/health", new HealthCheckOptions
+            {
+                ResponseWriter =  UIResponseWriter.WriteHealthCheckUIResponse
+            });
 
             return app;
         }
